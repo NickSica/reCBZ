@@ -97,7 +97,7 @@ def save(book):
             book.fp.unlink()
         # elif savedir TODO
         else:
-            name = str(Path.joinpath(Path.cwd(), f'{actual_stem} [reCBZ]'))
+            name = str(Path.joinpath(book.fp.parents[0], f'{actual_stem} [reCBZ]'))
         new_fp = Path(book.write_archive(config.archive_format, file_name=name))
     else:
         new_fp = book.fp

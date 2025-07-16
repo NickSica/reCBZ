@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import re
+import os
 import time
 import shutil
 import tempfile
@@ -24,9 +25,17 @@ SOURCE_NAME:str = 'Source'
 chapter_prefix:str = 'v' # :) :D C:
 
 
-def write_zip(savepath, chapters):
+def write_zip(savepath, chapters, extra_files=None):
     new_zip = ZipFile(savepath,'w')
     lead_zeroes = len(str(len(chapters)))
+    if extra_files:
+        for file_name, comic_info in extra_files.items():
+            dest = file_name
+            if config.compress_zip:
+                new_zip.writestr(dest, comic_info, ZIP_DEFLATED, 9)
+            else:
+                new_zip.writestr(dest, comic_info, ZIP_STORED)
+
     for i, chapter in enumerate(chapters):
         for page in chapter:
 
@@ -256,6 +265,7 @@ class ComicArchive():
         self._chapters = []
         self._bad_files = []
         self._cachedir = Path(tempfile.mkdtemp(prefix='book_', dir=reCBZ.GLOBAL_CACHEDIR))
+        self._extra_files = dict()
 
     @property
     def bad_files(self):
@@ -293,8 +303,28 @@ class ComicArchive():
             compressed_files = compressed_files[delta-count:delta+count:2]
 
         mylog(f'Extracting: {self.fp}', progress=True)
+
+        ext_list = [ ext for x in FormatList for ext in x.ext ]
         for file in compressed_files:
             source_zip.extract(file, self._cachedir)
+            file_ext = os.path.splitext(file)[1]
+            if not (file_ext.lower() in ext_list):
+                xml = os.path.join(self._cachedir, file)
+                bad_exts = [".db", ".DS_STORE", ".nfo", ".sfv", ".par2", ".PAR2"]
+                file_good = True
+                for ext in bad_exts:
+                    if ext in file or file_ext == ext:
+                        file_good = False
+
+                if file_ext == ".gif" and os.path.isfile(xml):
+                    with open(xml, 'rb') as f:
+                        self._extra_files[file] = f.read()
+                elif file_good and os.path.isfile(xml):
+                    with open(xml, 'r') as f:
+                        self._extra_files[file] = f.read()
+
+                if not os.path.isdir(xml):
+                    os.remove(xml)
 
         # god bless you Georgy https://stackoverflow.com/a/50927977/
         raw_paths = tuple(filter(Path.is_file, Path(self._cachedir).rglob('*')))
@@ -409,7 +439,7 @@ class ComicArchive():
 
         new_path = str(new_path)
         if book_format == 'cbz':
-            return write_zip(new_path, self.fetch_chapters())
+            return write_zip(new_path, self.fetch_chapters(), self._extra_files)
         elif book_format == 'zip':
             return write_zip(new_path, self.fetch_chapters())
         elif book_format == 'epub':
